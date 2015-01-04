@@ -16,6 +16,7 @@ module Rack
     # are encoded and that you understand the consequences (see documentation)
     def initialize(app, options={})
       default_options = {
+        :ssl_redirect_host    => nil,
         :redirect_to          => nil,
         :redirect_code        => nil,
         :strict               => false,
@@ -80,7 +81,11 @@ module Rack
     end
 
     def host_mismatch?
-      destination_host && destination_host != @request.host
+      if @options[:ssl_redirect_host] and scheme_mismatch?
+        ssl_redirect_host && ssl_redirect_host != @request.host
+      else
+        destination_host && destination_host != @request.host
+      end
     end
 
     def call_before_redirect
@@ -90,7 +95,12 @@ module Rack
     def modify_location_and_redirect
       location = "#{current_scheme}://#{@request.host}#{@request.fullpath}"
       location = replace_scheme(location, @scheme)
-      location = replace_host(location, @options[:redirect_to])
+      if @options[:ssl_redirect_host] and scheme_mismatch?
+        location = replace_host(location, @options[:ssl_redirect_host])
+      else
+        location = replace_host(location, @options[:redirect_to])
+      end
+
       redirect_to(location)
     end
 
@@ -110,6 +120,13 @@ module Rack
     def destination_host
       if @options[:redirect_to]
         host_parts = URI.split(@options[:redirect_to])
+        host_parts[2] || host_parts[5]
+      end
+    end
+    
+    def ssl_redirect_host
+      if @options[:ssl_redirect_host]
+        host_parts = URI.split(@options[:ssl_redirect_host])
         host_parts[2] || host_parts[5]
       end
     end
